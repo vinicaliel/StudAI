@@ -36,3 +36,4 @@ build/
 **/.env
 *.env
 **/docker-compose.yml
+application.yml
