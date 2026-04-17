@@ -15,6 +15,8 @@ import studAI.AI.user.User;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class SummaryService {
@@ -45,10 +47,11 @@ public class SummaryService {
         }
 
         // 2. Extrai o texto do PDF
-        String extractedText = "";
+        String extractedText;
+        int totalPages;
         try (InputStream is = file.getInputStream(); PDDocument document = PDDocument.load(is)) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            extractedText = stripper.getText(document);
+            totalPages = document.getNumberOfPages();
+            extractedText = extractTextWithPageMarkers(document, 10);
         }
 
         // Limita o tamanho do texto para economizar dinheiro com a OpenAI (Ex: Corta nas 15 mil letras)
@@ -64,6 +67,7 @@ public class SummaryService {
         material.setUser(user);
         material.setFileName(file.getOriginalFilename());
         material.setS3Key(s3Key);
+        material.setTotalPages(totalPages);
         material.setStatus("COMPLETED");
         materialRepository.save(material);
 
@@ -77,12 +81,183 @@ public class SummaryService {
         // 7. Salva o super resumo no banco
         Summary summary = new Summary();
         summary.setMaterial(material);
-        summary.setTitle(iaResponse.path("title").asText());
-        summary.setShortSummary(iaResponse.path("shortSummary").asText());
-        summary.setMainTopics(iaResponse.path("mainTopics").asText());
-        summary.setImportantPoints(iaResponse.path("importantPoints").asText());
-        summary.setSimplifiedExplanation(iaResponse.path("simplifiedExplanation").asText());
+        summary.setTitle(getAsTextOrDefault(iaResponse, "title", "Resumo do Material"));
+        summary.setShortSummary(resolveShortSummary(iaResponse));
+        summary.setMainTopics(resolveMainTopics(iaResponse));
+        summary.setImportantPoints(resolveImportantPoints(iaResponse, summary.getMainTopics()));
+        summary.setSimplifiedExplanation(
+                getAsTextOrDefault(
+                        iaResponse,
+                        "simplifiedExplanation",
+                        "Explicacao detalhada indisponivel para este material."
+                )
+        );
         
         return summaryRepository.save(summary);
+    }
+
+    private String extractTextWithPageMarkers(PDDocument document, int maxPages) throws Exception {
+        PDFTextStripper stripper = new PDFTextStripper();
+        int pagesToProcess = Math.min(document.getNumberOfPages(), maxPages);
+        StringBuilder builder = new StringBuilder();
+
+        for (int page = 1; page <= pagesToProcess; page++) {
+            stripper.setStartPage(page);
+            stripper.setEndPage(page);
+            String pageText = stripper.getText(document).trim();
+            if (!pageText.isBlank()) {
+                builder.append("### PAGINA ").append(page).append('\n');
+                builder.append(pageText).append("\n\n");
+            }
+        }
+
+        return builder.toString().trim();
+    }
+
+    private String getAsTextOrDefault(JsonNode node, String field, String fallback) {
+        String value = node.path(field).asText("").trim();
+        return value.isEmpty() ? fallback : value;
+    }
+
+    private String resolveShortSummary(JsonNode iaResponse) {
+        String shortSummary = iaResponse.path("shortSummary").asText("").trim();
+        if (!shortSummary.isEmpty()) {
+            return shortSummary;
+        }
+        String finalSummary = iaResponse.path("finalSummary").asText("").trim();
+        return finalSummary.isEmpty() ? "Resumo indisponivel para este material." : finalSummary;
+    }
+
+    private String resolveMainTopics(JsonNode iaResponse) {
+        String mainTopics = iaResponse.path("mainTopics").asText("").trim();
+        if (!mainTopics.isEmpty()) {
+            return mainTopics;
+        }
+
+        JsonNode pages = iaResponse.path("pages");
+        if (!pages.isArray() || pages.isEmpty()) {
+            return "Topicos principais nao identificados.";
+        }
+
+        List<String> lines = new ArrayList<>();
+        for (JsonNode pageNode : pages) {
+            int page = pageNode.path("page").asInt();
+            JsonNode topics = pageNode.path("topics");
+            String detailedExplanation = pageNode.path("detailedExplanation").asText("").trim();
+            if (topics.isArray() && !topics.isEmpty()) {
+                List<String> topicList = new ArrayList<>();
+                for (JsonNode topic : topics) {
+                    String topicText = topic.asText("").trim();
+                    if (!topicText.isEmpty()) {
+                        topicList.add(topicText);
+                    }
+                }
+                if (!topicList.isEmpty()) {
+                    lines.add("Pagina " + page + ": " + String.join(", ", topicList));
+                    if (!detailedExplanation.isEmpty()) {
+                        lines.add("Explicacao: " + detailedExplanation);
+                    }
+                }
+            }
+        }
+
+        return lines.isEmpty() ? "Topicos principais nao identificados." : String.join("\n", lines);
+    }
+
+    private String resolveImportantPoints(JsonNode iaResponse, String mainTopics) {
+        String importantPoints = iaResponse.path("importantPoints").asText("").trim();
+        if (isUsefulText(importantPoints)) {
+            return importantPoints;
+        }
+
+        JsonNode pages = iaResponse.path("pages");
+        if (pages.isArray() && !pages.isEmpty()) {
+            List<String> points = new ArrayList<>();
+            for (JsonNode pageNode : pages) {
+                JsonNode concepts = pageNode.path("importantConcepts");
+                String explanation = pageNode.path("conceptsExplanation").asText("").trim();
+                if (!concepts.isArray() || concepts.isEmpty()) {
+                    continue;
+                }
+                for (JsonNode concept : concepts) {
+                    String conceptText = concept.asText("").trim();
+                    if (!conceptText.isEmpty()) {
+                        if (!explanation.isEmpty()) {
+                            points.add("- " + conceptText + ": " + explanation);
+                        } else {
+                            points.add("- " + conceptText);
+                        }
+                    }
+                }
+            }
+            if (!points.isEmpty()) {
+                return String.join("\n", points);
+            }
+        }
+
+        if (isUsefulText(mainTopics)) {
+            return buildImportantPointsFromMainTopics(mainTopics);
+        }
+
+        return """
+                - Estrutura do conteudo: organize o estudo por paginas e identifique conceitos-chave.
+                - Revisao ativa: transforme cada topico em pergunta de prova e responda sem consultar o material.
+                - Aplicacao pratica: relacione cada conceito com um exemplo real de uso.
+                - Erros comuns: anote confusoes frequentes e como evita-las na prova.
+                """.trim();
+    }
+
+    private boolean isUsefulText(String text) {
+        if (text == null) {
+            return false;
+        }
+        String normalized = text.trim();
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return !normalized.equalsIgnoreCase("Pontos importantes nao identificados.")
+                && !normalized.equalsIgnoreCase("Topicos principais nao identificados.")
+                && !normalized.equalsIgnoreCase("Resumo indisponivel para este material.");
+    }
+
+    private String buildImportantPointsFromMainTopics(String mainTopics) {
+        List<String> points = new ArrayList<>();
+        String[] lines = mainTopics.split("\\R");
+        for (String rawLine : lines) {
+            String line = rawLine.trim();
+            String normalized = line.toLowerCase();
+            if (!normalized.startsWith("pagina") && !normalized.startsWith("página")) {
+                continue;
+            }
+
+            int separator = line.indexOf(':');
+            if (separator < 0 || separator + 1 >= line.length()) {
+                continue;
+            }
+            String pageLabel = line.substring(0, separator).trim();
+            String topicsText = line.substring(separator + 1).trim();
+            if (topicsText.isEmpty()) {
+                continue;
+            }
+
+            String[] topics = topicsText.split(",");
+            for (String topicRaw : topics) {
+                String topic = topicRaw.trim();
+                if (topic.isEmpty()) {
+                    continue;
+                }
+                points.add("- " + pageLabel + " - " + topic
+                        + ": conceito central para prova; estude definicao, contexto historico/tecnico e aplicacao atual.");
+            }
+        }
+
+        if (points.size() < 8) {
+            points.add("- Estrategia de prova: converta explicacoes longas em mapas mentais por pagina para revisar mais rapido.");
+            points.add("- Questoes discursivas: pratique respostas comparando causa, efeito e relevancia dos topicos.");
+            points.add("- Questoes objetivas: crie alternativas com pegadinhas em conceitos semelhantes para fixar diferencas.");
+            points.add("- Revisao final: priorize topicos com maior conexao entre teoria e aplicacao pratica.");
+        }
+
+        return String.join("\n", points);
     }
 }

@@ -45,18 +45,11 @@ public class OpenAiService {
 
             String mockJson = """
             {
-              "title": "Análise Simulada do Documento",
-              "pages": [
-                {
-                  "page": 1,
-                  "topics": ["Cabeamento estruturado", "Normas técnicas"],
-                  "detailedExplanation": "O documento apresenta conceitos fundamentais sobre cabeamento estruturado e normas aplicáveis em ambientes críticos.",
-                  "importantConcepts": ["NBR 14565", "EIA/TIA 569-A"],
-                  "conceptsExplanation": "Essas normas garantem padronização e qualidade na implementação de redes."
-                }
-              ],
-              "finalSummary": "O material aborda fundamentos de infraestrutura de redes e energia em ambientes como data centers.",
-              "simplifiedExplanation": "Basicamente, o conteúdo explica como organizar redes e energia de forma segura e padronizada."
+              "title": "Infraestrutura de Data Center: Cabeamento, Normas e Energia",
+              "shortSummary": "O material analisa os subsistemas de cabeamento estruturado e sua relacao com confiabilidade operacional em data centers. Tambem discute normas tecnicas, criterios de implantacao e calculos eletricos basicos para dimensionamento. A parte final detalha estrategias de redundancia energetica para continuidade de servico.",
+              "mainTopics": "- Pagina 1: Fundamentos de sistemas estruturados e funcao de cada subsistema.\\n- Pagina 2: Normas de padronizacao e criterios de conformidade tecnica.\\n- Pagina 3: Calculos basicos de sistemas eletricos para cargas e distribuicao.\\n- Pagina 4: Arquiteturas de energia redundante e analise de disponibilidade.",
+              "importantPoints": "- Cabeamento horizontal e vertical cumprem papeis distintos na topologia e impactam manutencao.\\n- Normas como NBR 14565 e EIA/TIA orientam interoperabilidade, seguranca e expansao futura.\\n- Dimensionamento eletrico inadequado aumenta risco de falhas e indisponibilidade.\\n- Redundancia N+1 e 2N reduz ponto unico de falha em ambientes criticos.",
+              "simplifiedExplanation": "Pense no data center como um organismo: o cabeamento e o sistema nervoso, as normas sao as regras que garantem que tudo converse corretamente, e a energia redundante e o plano de contingencia. O texto mostra que desempenho e confiabilidade nao dependem de um unico elemento, mas da integracao entre projeto fisico, padroes tecnicos e estrategia energetica."
             }
             """;
 
@@ -67,41 +60,91 @@ public class OpenAiService {
         // 🧠 PROMPT
         // ===============================
         String prompt = """
-        Você é um professor universitário altamente técnico e detalhista.
+        Você é um professor universitário técnico e didático.
+        Analise profundamente o material acadêmico abaixo.
 
-        Analise o conteúdo fornecido como material acadêmico.
+        OBJETIVO:
+        - produzir um resumo TRABALHADO (não superficial)
+        - explicar os conceitos importantes com contexto e impacto prático
+        - analisar por página quando o conteúdo tiver marcadores de página
 
-        Sua tarefa NÃO é resumir superficialmente.
-        Sua tarefa é ANALISAR e EXPLICAR profundamente.
-
-        Retorne um JSON com a seguinte estrutura:
-
+        RETORNE APENAS JSON VÁLIDO neste formato EXATO:
         {
-          "title": "...",
-          "pages": [
-            {
-              "page": 1,
-              "topics": ["..."],
-              "detailedExplanation": "...",
-              "importantConcepts": ["..."],
-              "conceptsExplanation": "..."
-            }
-          ],
-          "finalSummary": "...",
-          "simplifiedExplanation": "..."
+          "title": "string",
+          "shortSummary": "string",
+          "mainTopics": "string",
+          "importantPoints": "string",
+          "simplifiedExplanation": "string"
         }
 
-        REGRAS:
-        - Analise como conteúdo universitário
-        - NÃO simplifique demais
-        - NÃO responda superficialmente
-        - Explique cada conceito com profundidade
-        - Identifique tópicos relevantes
-        - Seja técnico, mas claro
+        REGRAS DE QUALIDADE:
+        - title: título técnico e específico do material
+        - shortSummary: entre 4 e 7 frases, em tom didático de preparação para prova, sem generalidades vagas
+        - shortSummary deve ser encorpado (aprox. 180 a 260 palavras), com visão geral + objetivos de estudo
+        - mainTopics: OBRIGATORIAMENTE com explicação por página, no formato:
+          "Página X: tópico A, tópico B, tópico C"
+          "Explicação: análise técnica do que esses tópicos significam, como se conectam e por que importam."
+          (duas linhas por página, separadas por quebra de linha)
+        - Para cada página, a explicação deve ter no mínimo 4 frases
+        - Em cada explicação de página, inclua obrigatoriamente:
+          1) importância acadêmica/técnica do assunto
+          2) usabilidade/aplicação nos dias atuais
+          3) impacto prático quando bem aplicado
+          4) risco ou limitação quando ignorado
+        - Quando houver fórmulas no conteúdo, inclua por página:
+          a) a fórmula
+          b) o significado de cada variável/símbolo
+          c) a função da fórmula (para que ela serve no contexto)
+          d) 1 exemplo numérico curto de aplicação com resultado
+        - Se não houver fórmulas explícitas, use pelo menos 1 exemplo prático aplicado ao contexto da página
+        - Evite descrições genéricas; use análise contextual e objetiva
+        - importantPoints: liste entre 8 e 15 pontos importantes com:
+          conceito + por que importa + consequência prática + dica de estudo para prova
+          (uma linha por ponto, com "- ")
+        - importantPoints deve conter no minimo 12 pontos
+        - simplifiedExplanation: explicação detalhada em linguagem clara,
+          conectando os tópicos, mostrando aplicações reais e incluindo
+          3 a 5 miniquestões de revisão (pergunta e resposta curta)
+        - simplifiedExplanation deve ser longo e encorpado (aprox. 350 a 700 palavras),
+          funcionando como texto de revisão final para prova
+        - não deixe campos vazios
+        - não use markdown fora das quebras de linha e prefixo "- "
+
+        LOGICA DIDATICA ADICIONAL (SEM ALTERAR O FORMATO FINAL EXIGIDO):
+        - Aja como professor universitario especialista em preparacao para provas e concursos.
+        - Estruture mentalmente a resposta como um material completo de estudo:
+          introducao, topicos organizados, pontos importantes, exemplos, calculos (quando houver),
+          questao estilo prova e resumo final com dicas de estudo.
+        - Como o formato de saida deve permanecer com os 5 campos atuais, mapeie assim:
+          1) title -> titulo tecnico do material
+          2) shortSummary -> introducao didatica + objetivo de aprendizagem
+          3) mainTopics -> topicos organizados por pagina com explicacao aprofundada,
+             exemplos de uso atual e, quando houver, formulas com variaveis e exemplo resolvido
+          4) importantPoints -> pontos criticos para prova + erros comuns + dicas praticas
+          5) simplifiedExplanation -> sintese final robusta + miniquestoes estilo prova
+             (pergunta, resposta e justificativa curta) + estrategias de revisao
+        - Em calculos/formulas, sempre informar:
+          formula, significado de cada termo, funcao da formula no contexto e exemplo aplicado.
+        - Evite repeticao vazia; cada pagina deve agregar aprendizado novo e util para estudo.
+        - Crie explicitamente um topico "Formulas Utilizadas" dentro de mainTopics:
+          liste apenas formulas que aparecem ou sao claramente derivadas do documento;
+          para cada formula, explique variaveis, finalidade e quando aplicar.
+        - Crie explicitamente um topico "Exemplos de Questoes" dentro de mainTopics:
+          inclua pelo menos 5 questoes estilo prova com resposta curta e justificativa objetiva.
+        - PERMITIDO e RECOMENDADO usar conteudos do proprio PDF para enriquecer a didatica:
+          trechos relevantes, termos tecnicos originais, exemplos descritos no material e
+          dados numericos presentes no texto.
+        - Quando citar conteudo do PDF, integre esse conteudo com explicacao (nao apenas copie),
+          mostrando o que significa e por que aquilo e importante para prova e aplicacao pratica.
+        - Em exemplos de calculo, priorize valores e cenarios do proprio PDF quando disponiveis;
+          se nao houver valores explicitos, crie um exemplo coerente e informe que e ilustrativo.
+        - Se o documento nao trouxer formulas, no topico "Formulas Utilizadas" escreva
+          "Nenhuma formula explicita identificada no documento" e inclua no minimo 1 formula
+          basica relacionada ao tema apenas como reforco didatico, sinalizando que e complementar.
 
         IMPORTANTE:
-        - Retorne apenas JSON válido
-        - Não use markdown
+        - retorne somente o objeto JSON
+        - não inclua texto adicional antes/depois
 
         Conteúdo:
         """ + extractedText;
@@ -112,8 +155,8 @@ public class OpenAiService {
         ObjectNode requestJson = objectMapper.createObjectNode();
 
         requestJson.put("model", "gpt-4o-mini");
-        requestJson.put("temperature", 0.7);
-        requestJson.put("max_tokens", 4000);
+        requestJson.put("temperature", 0.9);
+        requestJson.put("max_tokens", 7000);
 
         // messages
         ArrayNode messages = objectMapper.createArrayNode();
