@@ -37,6 +37,36 @@ public class Summary {
     @Column(name = "simplified_explanation", nullable = false, columnDefinition = "TEXT")
     private String simplifiedExplanation;
 
+    @Column(name = "introduction", columnDefinition = "TEXT")
+    private String introduction;
+
+    @Column(name = "formulas_used", columnDefinition = "TEXT")
+    private String formulasUsed;
+
+    @Column(name = "exam_questions", columnDefinition = "TEXT")
+    private String examQuestions;
+
+    @Column(name = "study_tips", columnDefinition = "TEXT")
+    private String studyTips;
+
+    @Column(name = "final_summary", columnDefinition = "TEXT")
+    private String finalSummary;
+
+    @Column(name = "page_analysis_json", columnDefinition = "TEXT")
+    private String pageAnalysisJson;
+
+    @Column(name = "quality_score")
+    private Integer qualityScore;
+
+    @Column(name = "word_count")
+    private Integer wordCount;
+
+    @Column(name = "model_used", length = 100)
+    private String modelUsed;
+
+    @Column(name = "prompt_version", length = 50)
+    private String promptVersion;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

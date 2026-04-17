@@ -85,13 +85,17 @@ public class SummaryService {
         summary.setShortSummary(resolveShortSummary(iaResponse));
         summary.setMainTopics(resolveMainTopics(iaResponse));
         summary.setImportantPoints(resolveImportantPoints(iaResponse, summary.getMainTopics()));
-        summary.setSimplifiedExplanation(
-                getAsTextOrDefault(
-                        iaResponse,
-                        "simplifiedExplanation",
-                        "Explicacao detalhada indisponivel para este material."
-                )
-        );
+        summary.setSimplifiedExplanation(resolveSimplifiedExplanation(iaResponse, summary.getMainTopics()));
+        summary.setIntroduction(resolveIntroduction(iaResponse, summary.getShortSummary()));
+        summary.setFormulasUsed(resolveFormulasUsed(iaResponse, summary.getMainTopics()));
+        summary.setExamQuestions(resolveExamQuestions(iaResponse));
+        summary.setStudyTips(resolveStudyTips(iaResponse));
+        summary.setFinalSummary(resolveFinalSummary(iaResponse, summary.getSimplifiedExplanation()));
+        summary.setPageAnalysisJson(resolvePageAnalysisJson(iaResponse));
+        summary.setModelUsed("gpt-4o-mini");
+        summary.setPromptVersion("v2-didatic-summary");
+        summary.setWordCount(calculateWordCount(summary));
+        summary.setQualityScore(calculateQualityScore(summary));
         
         return summaryRepository.save(summary);
     }
@@ -126,6 +130,98 @@ public class SummaryService {
         }
         String finalSummary = iaResponse.path("finalSummary").asText("").trim();
         return finalSummary.isEmpty() ? "Resumo indisponivel para este material." : finalSummary;
+    }
+
+    private String resolveSimplifiedExplanation(JsonNode iaResponse, String mainTopics) {
+        String simplifiedExplanation = iaResponse.path("simplifiedExplanation").asText("").trim();
+        if (isUsefulText(simplifiedExplanation)) {
+            return simplifiedExplanation;
+        }
+        if (isUsefulText(mainTopics)) {
+            return "Explicacao geral baseada nos topicos identificados:\n" + mainTopics;
+        }
+        return "Explicacao detalhada indisponivel para este material.";
+    }
+
+    private String resolveIntroduction(JsonNode iaResponse, String shortSummary) {
+        String introduction = iaResponse.path("introduction").asText("").trim();
+        if (isUsefulText(introduction)) {
+            return introduction;
+        }
+        return shortSummary;
+    }
+
+    private String resolveFormulasUsed(JsonNode iaResponse, String mainTopics) {
+        String formulasUsed = iaResponse.path("formulasUsed").asText("").trim();
+        if (isUsefulText(formulasUsed)) {
+            return formulasUsed;
+        }
+
+        String normalizedTopics = mainTopics == null ? "" : mainTopics.toLowerCase();
+        if (normalizedTopics.contains("formula") || normalizedTopics.contains("potencia")
+                || normalizedTopics.contains("cálculo") || normalizedTopics.contains("calculo")) {
+            return """
+                    - Formula identificada no material: revisar variaveis, unidade de medida e contexto de aplicacao.
+                    - Exemplo orientado: substituir valores, calcular passo a passo e validar unidade final.
+                    """.trim();
+        }
+
+        return "Nenhuma formula explicita identificada no documento.";
+    }
+
+    private String resolveExamQuestions(JsonNode iaResponse) {
+        String examQuestions = iaResponse.path("examQuestions").asText("").trim();
+        if (isUsefulText(examQuestions)) {
+            return examQuestions;
+        }
+
+        return """
+                1) Questao: Qual e o conceito central do material e por que ele e cobrado em prova?
+                Resposta: O conceito central envolve a relacao entre fundamentos teoricos e aplicacao pratica.
+                Justificativa: Bancas costumam avaliar entendimento conceitual com impacto real de uso.
+
+                2) Questao: Cite um ponto critico do tema e a consequencia de ignora-lo.
+                Resposta: Ignorar os fundamentos tecnicos leva a erros de interpretacao e aplicacao.
+                Justificativa: A prova exige capacidade de identificar risco, causa e efeito.
+
+                3) Questao: Como aplicar o conteudo em um cenario atual?
+                Resposta: Mapear o problema, selecionar o conceito correto e justificar a decisao.
+                Justificativa: Questoes modernas cobram transferencia de conhecimento para casos praticos.
+                """.trim();
+    }
+
+    private String resolveStudyTips(JsonNode iaResponse) {
+        String studyTips = iaResponse.path("studyTips").asText("").trim();
+        if (isUsefulText(studyTips)) {
+            return studyTips;
+        }
+        return """
+                - Estude por blocos: teoria, aplicacao, erros comuns e revisao.
+                - Transforme cada ponto importante em pergunta de prova objetiva e discursiva.
+                - Faca revisao ativa 24h depois para consolidar memoria de longo prazo.
+                - Resolva exemplos e simule explicacao oral para fixar entendimento.
+                """.trim();
+    }
+
+    private String resolveFinalSummary(JsonNode iaResponse, String simplifiedExplanation) {
+        String finalSummary = iaResponse.path("finalSummary").asText("").trim();
+        if (isUsefulText(finalSummary)) {
+            return finalSummary;
+        }
+        return simplifiedExplanation;
+    }
+
+    private String resolvePageAnalysisJson(JsonNode iaResponse) {
+        String pageAnalysisJson = iaResponse.path("pageAnalysisJson").asText("").trim();
+        if (isUsefulText(pageAnalysisJson)) {
+            return pageAnalysisJson;
+        }
+
+        JsonNode pages = iaResponse.path("pages");
+        if (!pages.isMissingNode() && !pages.isNull() && pages.isArray()) {
+            return pages.toString();
+        }
+        return "[]";
     }
 
     private String resolveMainTopics(JsonNode iaResponse) {
@@ -259,5 +355,58 @@ public class SummaryService {
         }
 
         return String.join("\n", points);
+    }
+
+    private int calculateWordCount(Summary summary) {
+        StringBuilder merged = new StringBuilder();
+        appendIfPresent(merged, summary.getShortSummary());
+        appendIfPresent(merged, summary.getMainTopics());
+        appendIfPresent(merged, summary.getImportantPoints());
+        appendIfPresent(merged, summary.getSimplifiedExplanation());
+        appendIfPresent(merged, summary.getIntroduction());
+        appendIfPresent(merged, summary.getFormulasUsed());
+        appendIfPresent(merged, summary.getExamQuestions());
+        appendIfPresent(merged, summary.getStudyTips());
+        appendIfPresent(merged, summary.getFinalSummary());
+
+        String allText = merged.toString().trim();
+        if (allText.isEmpty()) {
+            return 0;
+        }
+        return allText.split("\\s+").length;
+    }
+
+    private void appendIfPresent(StringBuilder builder, String text) {
+        if (text != null && !text.isBlank()) {
+            builder.append(text).append(' ');
+        }
+    }
+
+    private int calculateQualityScore(Summary summary) {
+        int score = 0;
+
+        if (isUsefulText(summary.getShortSummary())) {
+            score += 15;
+        }
+        if (isUsefulText(summary.getMainTopics())) {
+            score += 20;
+        }
+        if (isUsefulText(summary.getImportantPoints())) {
+            score += 20;
+        }
+        if (isUsefulText(summary.getSimplifiedExplanation())) {
+            score += 20;
+        }
+        if (isUsefulText(summary.getFormulasUsed())) {
+            score += 10;
+        }
+        if (isUsefulText(summary.getExamQuestions())) {
+            score += 10;
+        }
+        if (isUsefulText(summary.getStudyTips())) {
+            score += 5;
+        }
+
+        return Math.min(score, 100);
     }
 }

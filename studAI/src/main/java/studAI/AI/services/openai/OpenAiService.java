@@ -74,7 +74,13 @@ public class OpenAiService {
           "shortSummary": "string",
           "mainTopics": "string",
           "importantPoints": "string",
-          "simplifiedExplanation": "string"
+          "simplifiedExplanation": "string",
+          "introduction": "string",
+          "formulasUsed": "string",
+          "examQuestions": "string",
+          "studyTips": "string",
+          "finalSummary": "string",
+          "pageAnalysisJson": "string"
         }
 
         REGRAS DE QUALIDADE:
@@ -109,6 +115,7 @@ public class OpenAiService {
           funcionando como texto de revisão final para prova
         - não deixe campos vazios
         - não use markdown fora das quebras de linha e prefixo "- "
+        - pageAnalysisJson: retornar como string JSON (serializada) contendo array de paginas com topicos, explicacao, exemplos e formulas
 
         LOGICA DIDATICA ADICIONAL (SEM ALTERAR O FORMATO FINAL EXIGIDO):
         - Aja como professor universitario especialista em preparacao para provas e concursos.
@@ -123,6 +130,12 @@ public class OpenAiService {
           4) importantPoints -> pontos criticos para prova + erros comuns + dicas praticas
           5) simplifiedExplanation -> sintese final robusta + miniquestoes estilo prova
              (pergunta, resposta e justificativa curta) + estrategias de revisao
+        - Campos estendidos para enriquecimento:
+          introduction -> abertura didatica do tema
+          formulasUsed -> lista organizada das formulas usadas no documento
+          examQuestions -> bloco com questoes de prova e gabarito comentado
+          studyTips -> dicas de revisao objetiva para memorizacao e desempenho
+          finalSummary -> fechamento encorpado com conexoes entre os topicos
         - Em calculos/formulas, sempre informar:
           formula, significado de cada termo, funcao da formula no contexto e exemplo aplicado.
         - Evite repeticao vazia; cada pagina deve agregar aprendizado novo e util para estudo.
